@@ -208,6 +208,7 @@ class PokemonEnvironment(PyboyEnvironment):
             list(self._bit_count(self._read_m(i)) for i in range(0xD30A, 0xD31D))
         )
 
+    # dont need this
     def _read_money(self) -> int:
         return (
             100 * 100 * self._read_bcd(self._read_m(0xD347))

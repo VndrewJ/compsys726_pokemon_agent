@@ -48,13 +48,26 @@ class PokemonBrock(PokemonEnvironment):
         )
 
     def _get_state(self) -> np.ndarray:
-        # Implement your state retrieval logic here
+        # State includes map_id to track location changes
         game_stats = self._generate_game_stats()
-        return [game_stats["badges"]]
+        location = self._get_location()
+        return [game_stats["badges"], location["map_id"]]
 
-    def _calculate_reward(self, new_state: dict) -> float:
-        # Implement your reward calculation logic here
-        return new_state["badges"] - self.prior_game_stats["badges"]
+
+    def _calculate_reward(self, new_state: dict[str, any]) -> float:
+        # Reward +10 for leaving Oak's lab (map_id=40) and entering Pallet Town (map_id=0)
+        # Penalize -10 for going back into Oak's lab from Pallet Town
+        previous_map_id = self.prior_game_stats.get("location", {}).get("map_id", 40)  # Default to 40 (Oak's lab)
+        current_map_id = new_state["location"]["map_id"]
+        
+        reward = 0
+        if previous_map_id == 40 and current_map_id == 0:
+            reward += 10  # Reward for leaving Oak's lab and entering Pallet Town
+        elif previous_map_id == 0 and current_map_id == 40:
+            reward -= 10  # Penalty for going back into Oak's lab
+
+        return reward
+        #return new_state["badges"] - self.prior_game_stats["badges"]
 
     def _check_if_done(self, game_stats: dict[str, any]) -> bool:
         # Setting done to true if agent beats first gym (temporary)

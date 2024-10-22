@@ -13,7 +13,7 @@ class PokemonBrock(PokemonEnvironment):
     def __init__(
         self,
         act_freq: int,
-        emulation_speed: int = 0,
+        emulation_speed: int = 1,
         headless: bool = False,
     ) -> None:
 
@@ -24,7 +24,7 @@ class PokemonBrock(PokemonEnvironment):
             WindowEvent.PRESS_ARROW_UP,
             WindowEvent.PRESS_BUTTON_A,
             WindowEvent.PRESS_BUTTON_B,
-            WindowEvent.PRESS_BUTTON_START,
+            # WindowEvent.PRESS_BUTTON_START,
         ]
 
         release_button: list[WindowEvent] = [
@@ -34,7 +34,7 @@ class PokemonBrock(PokemonEnvironment):
             WindowEvent.RELEASE_ARROW_UP,
             WindowEvent.RELEASE_BUTTON_A,
             WindowEvent.RELEASE_BUTTON_B,
-            WindowEvent.RELEASE_BUTTON_START,
+            # WindowEvent.RELEASE_BUTTON_START,
         ]
 
         super().__init__(
@@ -47,27 +47,90 @@ class PokemonBrock(PokemonEnvironment):
             headless=headless,
         )
 
+        # Previous position buffer, initialize with starting position
+        self.position_buffer = [self._get_location()] * 10
+
+        # Map_id sequence
+        self.map_sequence = [40, 0, 12, 1, 13, 50, 51, 47, 3]
+
     def _get_state(self) -> np.ndarray:
-        # State includes map_id to track location changes
+        # State includes badges, map_id, player location (x, y), battle status, health, and level of the first Pokémon
         game_stats = self._generate_game_stats()
-        location = self._get_location()
-        return [game_stats["badges"], location["map_id"]]
+
+        state_array = [
+            game_stats["location"]["x"],
+            game_stats["location"]["y"],
+            game_stats["location"]["map_id"],
+            # game_stats["in_battle"],
+            # game_stats["hp"]["current"][0] if game_stats["party_size"] > 0 else 0,  # Check hp of pokemon
+            # game_stats["levels"][0] if game_stats["party_size"] > 0 else 0,         # Check level of pokemon
+        ]
+        return state_array
 
 
     def _calculate_reward(self, new_state: dict[str, any]) -> float:
-        # Reward +10 for leaving Oak's lab (map_id=40) and entering Pallet Town (map_id=0)
-        # Penalize -10 for going back into Oak's lab from Pallet Town
-        previous_map_id = self.prior_game_stats.get("location", {}).get("map_id", 40)  # Default to 40 (Oak's lab)
-        current_map_id = new_state["location"]["map_id"]
-        
         reward = 0
-        if previous_map_id == 40 and current_map_id == 0:
-            reward += 10  # Reward for leaving Oak's lab and entering Pallet Town
-        elif previous_map_id == 0 and current_map_id == 40:
-            reward -= 10  # Penalty for going back into Oak's lab
+
+        # Get in_battle bool and pokemon health and level
+        # in_battle = new_state["in_battle"]
+        # pokemon_health = new_state["hp"]["current"][0] if new_state["party_size"] > 0 else 0
+        # pokemon_level = new_state["levels"][0] if new_state["party_size"] > 0 else 0
+
+        # # Get previous Pokémon health and level
+        # previous_health = self.prior_game_stats["hp"]["current"][0] if self.prior_game_stats["party_size"] > 0 else 0
+        # previous_level = self.prior_game_stats["levels"][0] if self.prior_game_stats["party_size"] > 0 else 0
+
+        # Punish Player for Battling
+        # if in_battle:
+        #     reward -= 1
+
+        # # Evaluate rewards for battling
+        # if in_battle:
+        #     # Penalize if the Pokémon's health is low (e.g., below 20% of max health)
+        #     max_health = new_state["hp"]["max"][0] if new_state["party_size"] > 0 else 1
+        #     if max_health > 0 and pokemon_health / max_health < 0.2:
+        #         reward -= 20  # Penalty for battling with low health
+
+        # # Reward the player if the Pokémon levels up
+        # if pokemon_level > previous_level:
+        #     reward += 100  # Significant reward for leveling up
+        
+
+        # Get current and previous map IDs
+        previous_map_id = self.prior_game_stats.get("location", {}).get("map_id", 40)  # Default to Oak's lab (map_id=40)
+        current_map_id = new_state["location"]["map_id"]
+
+        # Handle map transitions for rewards
+        if previous_map_id in self.map_sequence and current_map_id in self.map_sequence:
+            prev_index = self.map_sequence.index(previous_map_id)
+            curr_index = self.map_sequence.index(current_map_id)
+
+            if curr_index == prev_index + 1:
+                reward += 50  # Reward for progressing to the next map in the sequence
+                self.position_buffer.clear()
+            elif curr_index == prev_index - 1:
+                reward -= 25  # Penalty for going back to the previous map in the sequence
+            elif curr_index < prev_index:
+                reward -= 2 
+
+        # Reward or penalty based on movement in position
+        current_position = (new_state["location"]["x"], new_state["location"]["y"])
+        if current_position not in self.position_buffer:
+            reward += 5  # Reward for moving to a new position
+        else:
+            reward -= 0  # Penalty for revisiting a previous position
+
+        # Update the position buffer (remove the oldest and add the new one)
+        if len(self.position_buffer) >= 200:
+            self.position_buffer.pop(0)  # Remove the oldest position if buffer is full
+        self.position_buffer.append(current_position)  # Add the new position
+
+        # # Punish Player for Battling
+        # in_battle = new_state["in_battle"]
+        # if in_battle:
+        #     reward -= 1
 
         return reward
-        #return new_state["badges"] - self.prior_game_stats["badges"]
 
     def _check_if_done(self, game_stats: dict[str, any]) -> bool:
         # Setting done to true if agent beats first gym (temporary)
@@ -77,4 +140,9 @@ class PokemonBrock(PokemonEnvironment):
         # Implement your truncation check logic here
 
         # Maybe if we run out of pokeballs...? or a max step count
-        return self.steps >= 1000
+
+        if self.steps >= 1000:
+            self.position_buffer.clear()  # Clear the position buffer when truncation occurs
+            return True
+        else:
+            return False

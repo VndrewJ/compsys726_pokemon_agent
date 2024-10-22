@@ -94,6 +94,7 @@ class PokemonEnvironment(PyboyEnvironment):
             "seen_pokemon": self._read_seen_pokemon_count(),
             "money": self._read_money(),
             "events": self._read_events(),
+            "in_battle": self._is_in_battle(),  # Add battle state to game stats
         }
 
     @abstractmethod
@@ -297,3 +298,8 @@ class PokemonEnvironment(PyboyEnvironment):
 
     def _event_reward(self, new_state: dict[str, any]) -> int:
         return sum(new_state["events"]) - sum(self.prior_game_stats["events"])
+    
+    # Check if the game state is in a battle
+    def _is_in_battle(self) -> bool:
+            #Checks if mem address is 1
+            return self._read_m(0xD057)

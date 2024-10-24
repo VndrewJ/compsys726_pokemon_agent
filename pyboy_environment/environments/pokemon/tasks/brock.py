@@ -76,7 +76,7 @@ class PokemonBrock(PokemonEnvironment):
         reward = 0
 
         # Punish agent for inputting invalid button
-        if self.current_button not in self.valid_actions:
+        if self.current_button not in self.valid_actions and self.current_button not in self.release_button:
             reward -= 5
 
         # Get in_battle bool and pokemon health and level
@@ -100,7 +100,7 @@ class PokemonBrock(PokemonEnvironment):
 
         # Reward agent for finding and defeating pokemon
         reward += self._seen_reward(new_state) * 100
-        reward += self._xp_reward(new_state) * 100
+        reward += self._xp_reward(new_state) * 10000
 
         # # Evaluate rewards for battling
         # if in_battle:

@@ -95,11 +95,9 @@ class PokemonBrock(PokemonEnvironment):
         #     reward += 1
 
         # Reward agent for defeating pokemon in any battle case
-        # if in_battle != 0:
-        #     reward += 1
+        if in_battle != 0:
+            reward += 1
 
-        # Reward agent for finding and defeating pokemon
-        reward += self._seen_reward(new_state) * 100
         reward += self._xp_reward(new_state) * 100
 
         # # Evaluate rewards for battling

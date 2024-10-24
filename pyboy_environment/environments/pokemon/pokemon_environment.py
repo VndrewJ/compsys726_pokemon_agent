@@ -68,6 +68,9 @@ class PokemonEnvironment(PyboyEnvironment):
         bins = np.linspace(0, 1, len(self.valid_actions) + 1)
         button = np.digitize(action, bins) - 1
 
+        # Save pushed button
+        self.current_button = button
+
         # Push the button for a few frames
         self.pyboy.send_input(self.valid_actions[button])
 
@@ -300,6 +303,8 @@ class PokemonEnvironment(PyboyEnvironment):
         return sum(new_state["events"]) - sum(self.prior_game_stats["events"])
     
     # Check if the game state is in a battle
-    def _is_in_battle(self) -> bool:
-            #Checks if mem address is 1
+    def _is_in_battle(self) -> int:
+            # 0: Not in battle
+            # 1: Wild pokemon Battle
+            # 2: Trainer Battle
             return self._read_m(0xD057)

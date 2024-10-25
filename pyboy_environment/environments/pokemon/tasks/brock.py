@@ -56,6 +56,10 @@ class PokemonBrock(PokemonEnvironment):
         # Track the initial position and maximum distance
         self.initial_position = None
         self.max_distance = 0
+        self.current_map_ticks = 0
+
+        # Counter for consecutive ticks in the same position
+        self.consecutive_ticks_in_same_position = 0
 
     def _get_state(self) -> np.ndarray:
         # State includes badges, map_id, player location (x, y), battle status, health, and level of the first Pokémon
@@ -94,12 +98,15 @@ class PokemonBrock(PokemonEnvironment):
         # elif self._read_m(0xD057) == 2:
         #     reward += 1
 
-        # Reward agent for defeating pokemon in any battle case
+        # Reward agent for being in battle (its exploiting this and stalling)
         # if in_battle != 0:
         #     reward += 1
 
+        # Motivate Agent to go to grass
+        reward += self._grass_reward(new_state) * 2
+
         # Reward agent for finding and defeating pokemon
-        reward += self._seen_reward(new_state) * 100
+        reward += self._seen_reward(new_state) * 1000
         reward += self._xp_reward(new_state) * 10000
 
         # # Evaluate rewards for battling
@@ -133,10 +140,18 @@ class PokemonBrock(PokemonEnvironment):
                 reward += 100  # Reward for progressing to the next map in the sequence
                 self.position_buffer.clear()
             elif curr_index == prev_index - 1:
-                reward -= 150  # Penalty for going back to the previous map in the sequence
-            # elif curr_index <= prev_index:
+                reward -= 250  # Penalty for going back to the previous map in the sequence
             else:
-                reward -= 0.5  # Penalty for going back or staying in the same zone for too long
+                reward -= 0.5 # Penalty for staying in the same map for too long
+            
+            # self.current_map_ticks = 0
+        
+        
+        # Penalty for staying in the same map ID for too long, wait for 10 ticks before it starts punishing
+        # if current_map_id == previous_map_id:
+        #     self.current_map_ticks += 1
+        # if self.current_map_ticks == 10:
+        #     reward -= 0.5
 
         # Reward or penalty based on movement in position
         current_position = (new_state["location"]["x"], new_state["location"]["y"])
@@ -145,9 +160,18 @@ class PokemonBrock(PokemonEnvironment):
         else:
             reward -= 2.5  # Penalty for revisiting a previous position
 
+        # Penalize the agent for standing in the same position for 5 ticks
+        if len(self.position_buffer) > 0 and current_position == self.position_buffer[-1]:
+            self.consecutive_ticks_in_same_position += 1
+            if self.consecutive_ticks_in_same_position >= 5:
+                reward -= 5  # Apply penalty for staying idle too long
+        else:
+            self.consecutive_ticks_in_same_position = 0  # Reset the counter if agent moves
+
+
         # Update the position buffer (remove the oldest and add the new one)
-        if len(self.position_buffer) >= 200:
-            self.position_buffer.pop(0)  # Remove the oldest position if buffer is full
+        # if len(self.position_buffer) >= 200:
+        #     self.position_buffer.pop(0)  # Remove the oldest position if buffer is full
         self.position_buffer.append(current_position)  # Add the new position
 
         # Reward for reaching a new maximum distance from the initial position
